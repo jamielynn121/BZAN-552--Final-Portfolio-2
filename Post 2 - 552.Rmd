@@ -2,9 +2,7 @@
 title: "Post 2 - Finances"
 author: "Jamie McKinnon"
 date: "November 10, 2018"
-output: 
-  html_document:
-    keep_md: true
+output: github_document
 ---
 
 ```{r setup, include=FALSE}
