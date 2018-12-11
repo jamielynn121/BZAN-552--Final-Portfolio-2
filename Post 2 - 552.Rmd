@@ -8,9 +8,7 @@ output:
 ---
 
 ```{r setup, include=FALSE}
-knitr::opts_chunk$set(
-  fig.path = "README_figs/README-"
-)
+knitr::opts_chunk$set(echo = TRUE)
 ```
 
 ```{r Load Packages, include = FALSE}
