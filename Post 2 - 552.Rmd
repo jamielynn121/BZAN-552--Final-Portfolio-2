@@ -1,0 +1,260 @@
+---
+title: "Post 2 - Finances"
+author: "Jamie McKinnon"
+date: "November 10, 2018"
+output: 
+  html_document:
+    keep_md: true
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(
+  fig.path = "README_figs/README-"
+)
+```
+
+```{r Load Packages, include = FALSE}
+library(DataExplorer)
+library(tidyverse)
+library(dplyr)
+library(lubridate)
+library(scales)
+#install.packages("GGally")
+library(GGally)
+#install.packages("TSclust")
+library(TSclust)
+library(reshape2)
+library(ggplot2)
+library(plotly)
+```
+
+# Data Collection and Pull
+This data is a collection of my household financial data from August 2016 - July 2018. Daily, in my household we record every transaction made via credit, debit, or cash purchases. There are no ommisions from this data set. Each month, we set a budget for each category and fund. This sheet is used in collaboration with several other sheets, including income, to create our monthly budget. 
+
+For the purposes of this analysis, only monthly spending is included. 
+
+I downloaded this data from my personal Google Drive account. 
+
+# Purpose
+The purpose of this analysis is to determine trends in our household spending over a two year period. Furthermore, visualizing the amount of money spent in certain categories may help my household decide to reduce spending in those categories as a New Years Resolution. If we know how we spend money, and which days or times of the month we are most likely to spend money, we may recognize those patterns in the future and cut back.
+
+# Data Processing
+First, I turned the dataset into a tibble for easy output. The data required a little pre-processing to alter amounts and keep them numeric without commas in the thousands place. The lubridate package was used to maniputlate the date column. 
+
+There were 13 entries over the two year that were not categorized or placed in a fund. I pull the note information on these to see if I can tell where they should have gone. There are few enough entries that I turn these into NA values so we can keep complete cases only. 
+
+I create a new column called wDay to represent the day of the week on which that date occured. This will help with further analysis. 
+
+```{r Reading and Processing}
+## READ DATA ##
+Finances <- read.csv("C:/Users/jamie/Documents/BZAN/BZAN-552--Final-Portfolio-2/Finances.csv", header = T, stringsAsFactors = F)
+Finances <- Finances[,c("Date", "Category", "Fund", "Amount", "Note")]
+
+
+## PROCESS ##
+Finances <- as.tibble(Finances)
+head(unique(Finances$Amount), 20)
+Finances$Amount <- gsub(",", "", Finances$Amount)
+head(unique(Finances$Amount), 20)
+
+Finances$Date <- lubridate::as_date(Finances$Date)
+Finances[which(lubridate::year(Finances$Date) < 2016),]
+Finances[which(lubridate::year(Finances$Date) > 2018),]
+
+head(unique(Finances$Category))
+Finances$Note[which(Finances$Category == "")]
+Finances$Category[which(Finances$Category == "")] <- NA
+
+Finances$wDay <- lubridate::wday(Finances$Date, label = TRUE, abbr = FALSE)
+Finances$Amount <- as.numeric(Finances$Amount)
+boxplot(Finances$Amount)
+Finances$Note[which(is.na(Finances$Amount))]
+Finances <- Finances[complete.cases(Finances),]
+
+
+Finances$Month_Yr <- format(as.Date(Finances$Date), "%Y-%m")
+length(unique(Finances$Month_Yr))
+```
+
+# Multivariate Visualization
+
+Visualizations of data can be helpful in determining patterns. I use ggplot2 and dplyr to manipulate the data and create several visualizations that tell unqiue stories. 
+
+## Daily Spending Over Time All Data
+This visualization shows the daily spending for the entire collection period. This is helpful for identifying major spikes to see what those occurances are and to eliminate those occurances from happening again, if possible. Consistantly, the data seems to follow a pattern with normal periodic spikes up to 1000 dollars, with few outliers that can be identified above that. Using package plotly, and the function ggplotly on our ggplot output, in R from the Viewer tab we can hover over individual points to see exact amounts and dates of these occurances. Unfortunatly, for publishing to github, this is a function that cannot be reproduced in the .rmd file for graded submission, but can be opened and viewed in R. To view the plotly version, simply unhash line 90.
+```{r}
+# Daily Spending over time #
+Finances %>%
+  ggplot(aes(x = Date, y = Amount)) +
+  geom_line() + 
+  theme_minimal() -> p
+p
+
+# ggplotly(p)
+```
+
+## Spending by Month
+The following plots show the categorical spending by month in plots 1 and 2, and the cumulative spending by month in plot 3. From the first plot is may be difficult to see that January is our highest spending month, but the cumulative, plot 3, shows us easily by comparison to other months. The first plot and second plots do show us that Savings in January is the highest folowed by Savings in August. This is easily explained because both myself and my husband are in grad school and we pay our tuition and fees in January and August. Monthly we contribute money to a savings account for tuition, and we remove it when the tuition is due.
+
+Plot 2 shows us the consistancy of our spending by month. There are a few outliers where Savings and Debts spike, but as a whole, other categories seem to be relatively consistant. This is a goal with our monthly budgeting. We hope that we can keep each category equal or as close to equal over time, so we can estimate how much money we would need any month. These data are collected over a two year period. Therefore, the monthly spending should be approximately half of what is shown on the Y axis below. 
+```{r Spending by Month}
+
+Finances %>%
+  group_by(Month = month(Date), Year = year(Date), Category) %>%
+  summarise(Amount = sum(Amount)) -> Finances_Summary
+
+# Spending by month scatter
+qplot(Month, Amount, data = Finances_Summary, colour = Category)
+
+# Spending by month colored by category
+Finances %>%
+  group_by(Month = month(Date), Year = year(Date), Category) %>%
+  summarise(Amount = sum(Amount)) %>%
+  ggplot( aes(x = Month, y = Amount, fill = Category )) +
+    geom_bar(stat="identity", position=position_dodge()) + 
+    scale_x_continuous(breaks= c(1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12)) +
+    theme_minimal()
+
+# Spending by month cummulative
+Finances %>%
+  group_by(Month = month(Date)) %>%
+  summarise(Amount = sum(Amount)) %>%
+  ggplot( aes(x = Month, y = Amount)) +
+    geom_bar(stat="identity", position=position_dodge()) + 
+    scale_x_continuous(breaks= c(1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12)) +
+    theme_minimal()
+
+```
+
+## Spending by Category
+This plot shows us the amount spent over two years cummulatively in all categories. Here, we see that we've spent the most in the Housing category with a value over 20,000 dollars. This is a little depressing as we currently rent, and all of that money is unrecoverable. The second category is food just below 15,000 dollars. For two years and two people, approximately 7000 dollars a year seems high for a food budget. After this analysis, we will consider reducing how much money we spend monthly on food to reduce our overall spending habits. Luckily, debts is our third highest category, which means we've paid off close to 12,500 dollars over the past two years. This is a category we would like to raise over the next year to more quickly pay off our student loans. Hopefully by reducing some of these other categories, we will be able to appropriate more funds to the debt category.
+
+```{r}
+# Spending by category
+Finances %>%
+  group_by(Category) %>%
+  summarise(Amount = sum(Amount)) %>%
+  ggplot(aes(x = reorder(Category, -Amount), y = Amount, fill = Category)) + 
+  geom_bar(width = 1, stat = "identity", position = position_dodge()) + 
+  coord_flip()
+```
+
+
+# Spending by Day of Week
+By looking at the day of the week where we spend the most money, we may be able to catch unhealthy spending habits. I expected this plot to have higher spending on the weekends, which would reinforce my hypothesis of unhealthy spending as recovery from weekday struggles. The only explaination I have for this is stores not processing sales on weekends, but waiting until the following workweek. Therefore, by the time it posts to the bank account, it is 2-3 days after the actual day the money was spent. A better data collection process would help correct this process if we kept our reciepts and posted them as we paid for things rather than when they posted to the bank account.
+
+The second plot in this section removes rent and debt from the daily plots since those are large spending categories, but uncontrollable due to the due date. Still, we see the same plot, only with a reduced y axis. This does not provide further insight into the day of week spending.
+
+```{r}
+# Spending by day of week
+Finances %>%
+  group_by(Day_of_Week = wDay) %>%
+  summarise(Amount = sum(Amount)) %>%
+  ggplot( aes(x = Day_of_Week, y = Amount)) +
+    geom_bar(stat="identity", position=position_dodge()) + 
+    theme_minimal()
+
+'%nin%' <- function(x,y)!('%in%'(x,y))
+
+# Spending by day of week - excluding rent and debt
+Finances[which(Finances$Fund %nin% c("Rent", "Debt")),] %>%
+  group_by(Day_of_Week = wDay) %>%
+  summarise(Amount = sum(Amount)) %>%
+  ggplot( aes(x = Day_of_Week, y = Amount)) +
+    geom_bar(stat="identity", position=position_dodge()) + 
+    theme_minimal()
+
+```
+
+# Frequency of Occurances
+The plot_bar function from the DataExplorer package displays the most frequently occuring Categories, days of the week, and month_year. This shows us that the food category is the most frequently assigned category with over 600 occurances in 2 years. This is followed closely by personal, with a frequency over 400. By reducing these two categories, we may be able to re-allocate the spending elsewhere, preferably to paying off debts. 
+
+```{r Frequency of Occurances}
+plot_bar(Finances)
+```
+
+
+# Reformating Data for Time Series Clustering
+To perform time series clustering using the TSclust package the data must be in n X p matrix format with no NA values for Amount. From the original data we select the cateogry, Month_Yr, a created column from date, and the Amount. I manipulate this to group by category and month_yr to summarize how much money was spent in each category over the two year period. This is then turned into a matrix format by spreading the data. The diss function from the TSclust package requires the transpose of the current setup where the columns are categories and the rows are months. The data is manipulated to accommodate this for the next section.
+
+
+Unfortunately, manipulating the data while the .Rmd was connected to github was not as simple as manipulating it in the .Rmd synced only to my desktop. There were problems in the dplyr function that wouldn't allow for group_by manipulation within this file without performing elsewhere and saving the data as a csv, then loading that csv to transform to a matrix. This is why the process is more obscure than I'd have prefered.
+
+```{r}
+
+Finances %>%
+  select(Category, Month_Yr, Amount) -> Finances_Sub
+
+Finances %>%
+  select(Category, Month_Yr, Amount) %>%
+  group_by(Category, Month_Yr) %>%
+  summarise(Amount = sum(Amount)) %>%
+  spread(key = Category, value = Amount) -> Finances_Sub
+
+#write.csv(Finances_Sub, "Finances_Sub.csv")
+
+Finances_Sub <- read.csv("C:/Users/jamie/Documents/BZAN/BZAN-552--Final-Portfolio-2/Finances_Sub.csv", row.names = 1)
+
+
+Finances_Sub <- t(as.matrix(Finances_Sub))
+colnames(Finances_Sub) <- Finances_Sub[1,]
+Finances_Sub <- Finances_Sub[-1,]
+Categories <- rownames(Finances_Sub)
+
+Finances_Sub <- apply(Finances_Sub, 2, as.numeric)
+rownames(Finances_Sub) <- Categories
+
+Finances_Sub <- replace_na(Finances_Sub, 0)
+
+# Get an idea of what these data look like - we can put together a compound time series plot
+par(mfrow=c(4,3))
+par(mar=c(2,2,1,0))
+for(i in 1:12){
+    plot(Finances_Sub[i,], main=rownames(Finances_Sub)[i], type="l")
+}
+
+```
+
+
+# Correlation
+The correlation of a data set tells us the degree of similarity. Here, we will be generating a dissimilarity matrix between time series.
+
+The matrix created, diss_matrix, is a measure of dissimilarity. The range of correlation is a measure from [0,2] where 2 is the most dissimilar categories.
+
+```{r Correlation}
+diss_matrix <- diss(Finances_Sub, "COR")
+summary(diss_matrix)
+
+melted_dissmat <- melt(as.matrix(diss_matrix))
+head(melted_dissmat)
+
+# which categories are the most dissimilar
+melted_dissmat[order(-melted_dissmat$value),]
+
+ggplot(data = melted_dissmat, aes(x=Var1, y=Var2, fill=value)) + 
+  geom_tile()
+```
+
+# Most Unique Time Series
+Here, we see that the personal category has the highest value, and therefore, the most unique time series. The personal category in our financial data represents money we allow ourselves to spend on whatever we would like. Monthly we appropriate a small fixed amount, but we don't always spend it every month. Sometimes we wait several months to spend in one lump sum. This make sense that it is the most unique times series, because there are no monthly requirements to the spending.
+
+```{r}
+sort(rowMeans(as.matrix(diss_matrix)))
+```
+
+
+# Hierarchical Clustering on the Dissimilarity Matrix
+Hierarchical clustering on the dissimilarity matrix visualizes the matrix output from above. Overall, the clustering of these categories based on amount spent per month only explains the consistancy of money spent over time. 
+
+Here, we see that clothing and debts are the most similar in the time series dataset with housing being a part of the cluster as well. These are likely some of our most consistant categories over time, with housing and debts being big spenders. 
+
+```{r}
+fit <- hclust(diss_matrix)
+plot(fit)
+```
+
+
+# Conclusion
+Based on this analysis, our household will try to reduce food spending and personal spending so those funds can be re-allocated to more important categories like Debts. This analysis has shed light on our current spending habits and, hopefully, will help to improve our finances in the future. 
+
+
